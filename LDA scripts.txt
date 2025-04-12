@@ -293,9 +293,9 @@ public class ldamain {
 		//加载自定义词典
 		//1.链接数据库
 		ldamain cm= new ldamain();
-		String phiMatrix="huangzhe";
-		int topicNum=9;
-		int wordNum=20;
+		String phiMatrix="XXX";
+		int topicNum=XXX;
+		int wordNum=XXX;
 		
         HashMap<String,String>z=cm.readMySql("weibodata", phiMatrix, "`time`>=1473782405", 610000);
         Corpus corpus = Corpus.load2(z);
