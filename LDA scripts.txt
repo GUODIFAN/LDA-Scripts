@@ -1,0 +1,339 @@
+package testfile;
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import com.hankcs.hanlp.HanLP;
+import com.hankcs.hanlp.seg.common.Term;
+import mianfile.LdaUtil;
+
+import mianfile.LdaGibbsSampler;
+
+import mianfile.Corpus;
+import mianfile.Vocabulary;
+import net.sf.json.JSONObject;;
+public class ldamain {
+	
+	
+	public Connection conn(String dataDase) throws ClassNotFoundException
+	{
+		Connection con = null;
+	
+		String driver = "com.mysql.jdbc.Driver";
+		String url = "jdbc:mysql://localhost:3306/" + dataDase+"?characterEncoding=UTF-8";
+		String user = "root";
+		String password = "";
+      	
+			try {
+				Class.forName(driver);
+				con = DriverManager.getConnection(url, user, password);
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+	    return con;
+		
+	}
+	public String doCutWord(String content){
+		String nativeStr1=null;
+		HashMap<String, Integer> resultMap = new HashMap<String,Integer>();
+		String sentcence="";
+		try {
+			
+			
+			List<Term> tokens=HanLP.segment(content);
+			
+			for (int i = 0; i < tokens.size(); i++) {
+				if(i<tokens.size()-1)
+				{
+					String words = tokens.get(i).toString().replace("[", "").replace("]", "");
+					sentcence+=words+" ";
+				}else {
+					String words = tokens.get(i).toString().replace("[", "").replace("]", "");
+					sentcence+=words;
+				}
+				
+			}
+	        //ICTCLAS  分词组件 JIEBA  HANLP
+			
+			//content= '我爱北京天安门'
+			//我/r 爱/v 北京/ns 天安门/n
+			
+		
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.exit(0);
+		}
+		return sentcence;
+		
+	}
+	public HashMap<String,String> idandmessMap= new HashMap<String,String>();
+	public HashMap<String,String> idandtimeMap= new HashMap<String,String>();
+	public  HashMap<String, String> readMySql(String dataDase,String table,String time,int messnum) throws SQLException, IOException
+	{
+		
+		try {
+			Connection con=conn(dataDase);
+			if (!con.isClosed())
+		    System.out.println("Succeeded connecting to the Database!");
+			Statement statement = con.createStatement();
+		
+			String sql = "select * from " + table + " where 1";
+			System.out.println(sql);
+			ResultSet rs = statement.executeQuery(sql);
+			
+			int flag = 0;
+			
+			while (rs.next()) {
+				String messid = rs.getString("id");
+				String messtime=rs.getString("time");
+			    String mess=rs.getString("mess");
+			    
+			    mess=mess.replace(" ", "");
+			   
+			    
+			    String temp2 = doCutWord(mess);
+			   
+			    
+			    this.idandmessMap.put(messid,temp2); //存放MESS信息
+			    this.idandtimeMap.put(messid,messtime); //存放Time信息
+			    
+				flag = flag + 1;   
+				if(flag==messnum)
+				{
+					break;
+				}
+			}
+		
+			
+		    rs.close();
+		    con.close();
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		System.out.println(idandmessMap.size());
+	
+		return idandmessMap;
+	}
+	public void writePhi(double[][] phi,String phiPath) throws IOException
+	{
+		//"E://javalib/savePhiForfzby.txt"
+		File file = new File(phiPath);
+		  FileWriter fw = new FileWriter(file,false);
+		  BufferedWriter bw = new BufferedWriter(fw);
+       for(int i=0;i<phi.length;i++)
+       {
+      	 for(int j=0;j<phi[0].length;j++)
+      	 {
+      		 double temp=phi[i][j];
+      		 if(j!=phi[0].length-1)
+			    {
+				    		
+				    bw.write(Double.toString(temp)+" ");
+			    }else
+			    {
+			    	bw.write(Double.toString(temp)+"\r\n");
+			    }
+      	 }
+       }
+       bw.close();
+       fw.close();
+	}
+	//idAndAccountMap,idAndNumMap
+		public void writeTheta(double[][] Theta,String phiPath,HashMap<String,String> idandTimeMap) throws IOException
+		{
+			//"E://javalib/savePhiForfzby.txt"
+			File file = new File(phiPath);
+			  FileWriter fw = new FileWriter(file,false);
+			  BufferedWriter bw = new BufferedWriter(fw);
+			  Iterator<String> artIterator = idandmessMap.keySet().iterator();
+			  
+
+			  
+			  
+			  
+	       for(int i=0;i<Theta.length;i++)
+	       {
+	    	String messid=artIterator.next();//ID信息
+	    	String Time=idandTimeMap.get(messid);//时间信息
+	    	
+	    	bw.write(messid+"%%"+Time+"%%");
+	    	//bw.write(messid+"%%");
+	    	double max= Theta[i][0];
+	  		int flag=0;
+	      	 for(int j=0;j<Theta[0].length;j++)
+	      	 {
+				
+	      		 double temp=Theta[i][j];
+	      		 if(temp>max)
+	      		 {
+	      			max=Theta[i][j];
+					flag=j;
+	      		 }
+	      		 if(j!=Theta[0].length-1)
+				    {
+					    		
+					    bw.write(Double.toString(temp)+"%%");
+				    }else
+				    {
+				    	bw.write(Double.toString(temp)+"%%"+flag+"\r\n");
+				    }
+	      	 }
+	       }
+	       bw.close();
+	       fw.close();
+		}
+		 public double getCosDiantance(double[] v1,double[] v2)
+			{
+				double cosDis=0;
+				double sum1=0;
+				double sum2=0;
+				for(int i=0;i<v1.length;i++)
+				{
+					double temp=Math.pow(v1[i], 2);
+					sum1+=temp;
+				}
+				double mo1=Math.sqrt(sum1);
+				
+				for(int i=0;i<v2.length;i++)
+				{
+					double temp=Math.pow(v2[i], 2);
+					sum2+=temp;
+				}
+				double mo2=Math.sqrt(sum2);
+				double fenmu=mo1*mo2;
+				
+				double fenzi=0;
+				for(int i=0;i<v1.length;i++)
+				{
+					double t=v1[i]*v2[i];
+					fenzi+=t;
+				}
+				cosDis=fenzi/fenmu;
+				return cosDis;
+				
+			}
+		
+		//计算困惑度
+		 public void getRe(double[][] phi, double[][] theta,int TopicK,Corpus corpus,int FenMu){
+		        double count = 0;
+		        int i = 0;
+		        double P=0.0;
+		        int Nlength=theta.length;
+		        
+		        Map<String, Integer> word2idMap=corpus.getVocabulary().word2idMap;
+		        
+		        //获取了词汇,ID的映射表
+		        Iterator<Map.Entry<String, Integer>> iteratorForList = word2idMap.entrySet().iterator();
+		       
+		        //向list中添加单词
+		        ArrayList<String> wordList = new ArrayList<String>();
+		        while(iteratorForList.hasNext())
+		        {
+		        	Map.Entry<String, Integer> entry = iteratorForList.next();//entry 是一个map集合中完整的元素
+		        	wordList.add(entry.getKey());//向list中添加单词
+		        	
+		        }
+		        
+		        Iterator<Map.Entry<String, Integer>> iteratorForMap = word2idMap.entrySet().iterator();
+//		        
+//		        //所有的词汇集合
+		       
+		        while(iteratorForMap.hasNext()){
+		        	Map.Entry<String, Integer> entry = iteratorForMap.next();
+		        	if(i>=Nlength)
+		        	{
+		        		break;
+		        	}	
+		            //遍历词汇集合
+		            double mul = 0;
+		            for(int j = 0; j < wordList.size(); j++){
+		                double sum = 0;
+		                String word = wordList.get(j);
+		                
+		                //word为汉语单词
+		                int index = word2idMap.get(word);
+		                
+		                //index为汉语单词的id
+		                //K为主题个数
+		                for (int k = 0; k < TopicK; k++){
+		                    
+		                	sum = sum + phi[k][index] * theta[i][k];
+		                	
+		                }
+		                mul = mul + Math.log(sum);
+		            }
+		            count = count + mul;
+		            i++;
+		        }
+		        count = 0 - count;
+		        P = count / FenMu;//N是文档的个数
+		        double P2=Math.pow(2.7, P);
+		        System.out.println("Perplexity:" + P);
+		 }
+	public static void main(String[] args) throws SQLException, IOException {
+		// TODO Auto-generated method stub
+		//加载自定义词典
+		//1.链接数据库
+		ldamain cm= new ldamain();
+		String phiMatrix="huangzhe";
+		int topicNum=9;
+		int wordNum=20;
+		
+        HashMap<String,String>z=cm.readMySql("weibodata", phiMatrix, "`time`>=1473782405", 610000);
+        Corpus corpus = Corpus.load2(z);
+		//2.训练模型
+        LdaGibbsSampler ldaGibbsSampler = new LdaGibbsSampler(corpus.getDocument(), corpus.getVocabularySize());
+		ldaGibbsSampler.gibbs(topicNum);
+		double[][] phi = ldaGibbsSampler.getPhi();//主题-词汇矩阵的 数值型表达
+		Map<String, Double>[] topicMap = LdaUtil.translate(phi, corpus.getVocabulary(), wordNum);//参数三 每个主题显示的词汇数量
+		File file = new File("phi/T"+topicNum+"word2idFor"+phiMatrix+".txt");
+	 	FileWriter fw = new FileWriter(file,false); 
+	 	BufferedWriter bw = new BufferedWriter(fw);  
+	   	Map<String, Integer> word2idMap=corpus.getVocabulary().word2idMap;
+	   	Iterator<String> wordsIterator = word2idMap.keySet().iterator();
+	   	while (wordsIterator.hasNext()) {
+	   		  String item = (String) wordsIterator.next();  		  
+						int index = word2idMap.get(item);				
+						bw.write(item+" "+index+"\r\n"); 		  
+	   	}
+	   	bw.close();
+		fw.close();
+		cm.writePhi(phi,"phi/T"+topicNum+"savePhiFor"+phiMatrix+".txt");//主题-词汇矩阵写入到PHI文件夹当中
+		   	
+		   	  
+		   	  
+		//--------------------------------------------------------
+		double[][] Theta = ldaGibbsSampler.getTheta();//文档-主题矩阵的数值型表达
+		//获取时间信息写入文档-主题矩阵当中：
+		HashMap<String,String>  idAndTimeMap=cm.idandtimeMap;
+			
+		//将文档-主题矩阵  和 ID-时间 MAP表， 写入到   PHI文件夹下的 文件当中
+		cm.writeTheta(Theta,"theta/T"+topicNum+"saveThetaFor"+phiMatrix+".txt",idAndTimeMap);
+		String fileTempName=phiMatrix;
+		LdaUtil.explain(topicMap,phiMatrix,Theta,fileTempName,topicNum);
+		
+		   	//计算困惑度
+		int wordNum4List=0;
+		wordNum4List=Corpus.returnFenMuNum();
+		System.out.println("困惑度分母："+wordNum4List);
+		cm.getRe(phi, Theta, topicNum, corpus,wordNum4List); 
+	}
+}
